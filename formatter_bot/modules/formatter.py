@@ -37,7 +37,7 @@ CUSTOM_FOOTER = """
 """
 
 # =========================
-# 🔥 جديد: تعديل لون الشعار فقط
+# 🔥 جديد: تعديل لون الشعار
 # =========================
 def adjust_logo_color(path, percent):
     img = Image.open(path).convert("RGBA")
@@ -159,11 +159,11 @@ async def handle_text(update, context):
 
     if s["step"] == "opacity":
         s["opacity"] = int(txt)
-        s["step"] = "ask_logo_color"  # 🔥 جديد
+        s["step"] = "ask_logo_color"
         await update.message.reply_text("🎨 هل تريد تعديل ألوان الشعار؟", reply_markup=yes_no("logo_color:yes", "logo_color:no"))
         return
 
-    if s["step"] == "logo_color_value":  # 🔥 جديد
+    if s["step"] == "logo_color_value":
         s["logo_color_percent"] = int(txt)
         s["step"] = "ask_brightness"
         await update.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
@@ -191,7 +191,6 @@ async def handle_callbacks(update, context):
     if not s:
         return
 
-    # 🔥 جديد
     if q.data == "logo_color:yes":
         s["step"] = "logo_color_value"
         await q.message.reply_text("كم نسبة التعديل؟ (مثال: 20 أو -20)")
@@ -202,7 +201,7 @@ async def handle_callbacks(update, context):
         await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
-    # ==== باقي الكود الأصلي بدون تغيير ====
+    # باقي الكود الأصلي كما هو 👇
 
     if q.data == "bright:yes":
         s["brightness"] = True

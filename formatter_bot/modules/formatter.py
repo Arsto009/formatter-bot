@@ -37,6 +37,19 @@ CUSTOM_FOOTER = """
 """
 
 # =========================
+# 🔥 جديد: تعديل لون الشعار بنسبة
+# =========================
+def adjust_logo_color(path, percent):
+    img = Image.open(path).convert("RGBA")
+    factor = 1 + percent / 100
+    img = ImageEnhance.Color(img).enhance(factor)
+    img = ImageEnhance.Contrast(img).enhance(factor)
+    img = ImageEnhance.Sharpness(img).enhance(factor)
+    out = tempfile.mktemp(suffix=".png")
+    img.save(out, "PNG")
+    return out
+
+# =========================
 # تحسين الشعار
 # =========================
 def enhance_logo_colors(path):
@@ -110,6 +123,7 @@ async def start_custom(update, context):
         "logo": None,
         "width": None,
         "opacity": None,
+        "logo_color_percent": 0,  # 🔥 جديد
         "brightness": False,
         "brightness_value": 0,
         "ai": False,
@@ -145,6 +159,12 @@ async def handle_text(update, context):
 
     if s["step"] == "opacity":
         s["opacity"] = int(txt)
+        s["step"] = "ask_logo_color"
+        await update.message.reply_text("🎨 هل تريد تعديل لون الشعار؟", reply_markup=yes_no("logo_color:yes", "logo_color:no"))
+        return
+
+    if s["step"] == "logo_color_value":
+        s["logo_color_percent"] = int(txt)
         s["step"] = "ask_brightness"
         await update.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
@@ -214,6 +234,16 @@ async def handle_callbacks(update, context):
     if not s:
         return
 
+    if q.data == "logo_color:yes":
+        s["step"] = "logo_color_value"
+        await q.message.reply_text("كم نسبة التعديل؟ (مثال: 20 أو -20)")
+        return
+
+    if q.data == "logo_color:no":
+        s["step"] = "ask_brightness"
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
+        return
+
     if q.data == "bright:yes":
         s["brightness"] = True
         s["step"] = "brightness_value"
@@ -274,7 +304,7 @@ async def handle_callbacks(update, context):
         await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
 
 # =========================
-# FINISH (أضيف فقط إرسال ألبوم)
+# FINISH (كما هو بدون تغيير)
 # =========================
 async def finish_custom(update, context):
     q = update.callback_query
@@ -314,10 +344,19 @@ async def finish_custom(update, context):
             with open(tmp, "wb") as f:
                 f.write(buf.read())
 
-            out = apply_custom_logo(tmp, s["logo"], s["width"], s["opacity"])
+            # 🔥 تطبيق تعديل لون الشعار هنا فقط
+            logo_path = s["logo"]
+            if s["logo_color_percent"] != 0:
+                logo_path = adjust_logo_color(s["logo"], s["logo_color_percent"])
+
+            out = apply_custom_logo(tmp, logo_path, s["width"], s["opacity"])
             media_group.append(InputMediaPhoto(open(out, "rb")))
         else:
-            outv = apply_custom_logo_video(path, s["logo"], s["width"], s["opacity"])
+            logo_path = s["logo"]
+            if s["logo_color_percent"] != 0:
+                logo_path = adjust_logo_color(s["logo"], s["logo_color_percent"])
+
+            outv = apply_custom_logo_video(path, logo_path, s["width"], s["opacity"])
             video_files.append(open(outv, "rb"))
 
     for kind, path in s["inputs"]:

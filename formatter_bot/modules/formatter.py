@@ -15,12 +15,18 @@ from settings import HEADER
 from core.keyboard import main_keyboard
 from modules.designer import apply_custom_logo, apply_custom_logo_video
 
+# =========================
+# Queue إعدادات
+# =========================
 MAX_FAST_SIZE = 2.3 * 1024 * 1024
 heavy_queue = deque()
 processing_queue = False
 
 sessions = {}
 
+# =========================
+# فوتر الإعلان
+# =========================
 CUSTOM_FOOTER = """
 ---------------------------
 بالامكان الاستفسار عن تفاصيل أكثر
@@ -30,6 +36,22 @@ CUSTOM_FOOTER = """
 07764404477
 """
 
+# =========================
+# 🔥 جديد: تعديل لون الشعار فقط
+# =========================
+def adjust_logo_color(path, percent):
+    img = Image.open(path).convert("RGBA")
+    factor = 1 + percent / 100
+    img = ImageEnhance.Color(img).enhance(factor)
+    img = ImageEnhance.Contrast(img).enhance(factor)
+    img = ImageEnhance.Sharpness(img).enhance(factor)
+    out = tempfile.mktemp(suffix=".png")
+    img.save(out, "PNG")
+    return out
+
+# =========================
+# تحسين الشعار
+# =========================
 def enhance_logo_colors(path):
     img = Image.open(path).convert("RGBA")
     img = ImageEnhance.Color(img).enhance(1.6)
@@ -38,20 +60,9 @@ def enhance_logo_colors(path):
     img.save(out, "PNG")
     return out
 
-# 🔥 جديد: تعديل لون الشعار (تشبع + تباين + وضوح)
-def adjust_logo_color(path, percent):
-    img = Image.open(path).convert("RGBA")
-
-    factor = 1 + percent / 100
-
-    img = ImageEnhance.Color(img).enhance(factor)
-    img = ImageEnhance.Contrast(img).enhance(factor)
-    img = ImageEnhance.Sharpness(img).enhance(factor)
-
-    out = tempfile.mktemp(suffix=".png")
-    img.save(out, "PNG")
-    return out
-
+# =========================
+# تحسين الصور
+# =========================
 def enhance_fast(img):
     img = img.filter(ImageFilter.SHARPEN)
     img = ImageEnhance.Contrast(img).enhance(1.1)
@@ -63,6 +74,9 @@ def enhance_strong(img):
     img = ImageEnhance.Contrast(img).enhance(1.18)
     return img
 
+# =========================
+# Queue Worker
+# =========================
 async def process_queue():
     global processing_queue
     if processing_queue:
@@ -73,6 +87,9 @@ async def process_queue():
         await job()
     processing_queue = False
 
+# =========================
+# Keyboards
+# =========================
 def yes_no(y, n):
     return InlineKeyboardMarkup([[
         InlineKeyboardButton("✅ نعم", callback_data=y),
@@ -96,6 +113,9 @@ def after_done():
         [InlineKeyboardButton("⛔ إنهاء العملية", callback_data="custom:end")]
     ])
 
+# =========================
+# Start
+# =========================
 async def start_custom(update, context):
     uid = update.effective_user.id
     sessions[uid] = {
@@ -103,7 +123,7 @@ async def start_custom(update, context):
         "logo": None,
         "width": None,
         "opacity": None,
-        "logo_color_percent": 0,   # 🔥 جديد
+        "logo_color_percent": 0,  # 🔥 جديد
         "brightness": False,
         "brightness_value": 0,
         "ai": False,
@@ -115,6 +135,9 @@ async def start_custom(update, context):
     await update.callback_query.answer()
     await update.callback_query.message.reply_text("📎 أرسل شعارك الآن")
 
+# =========================
+# TEXT
+# =========================
 async def handle_text(update, context):
     uid = update.effective_user.id
     txt = update.message.text.strip()
@@ -136,14 +159,14 @@ async def handle_text(update, context):
 
     if s["step"] == "opacity":
         s["opacity"] = int(txt)
-        s["step"] = "ask_logo_color"
+        s["step"] = "ask_logo_color"  # 🔥 جديد
         await update.message.reply_text("🎨 هل تريد تعديل ألوان الشعار؟", reply_markup=yes_no("logo_color:yes", "logo_color:no"))
         return
 
-    if s["step"] == "logo_color_value":
+    if s["step"] == "logo_color_value":  # 🔥 جديد
         s["logo_color_percent"] = int(txt)
         s["step"] = "ask_brightness"
-        await update.message.reply_text("💡 هل تريد تعديل إنارة الصور؟", reply_markup=yes_no("bright:yes", "bright:no"))
+        await update.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
     if s["step"] == "brightness_value":
@@ -157,6 +180,9 @@ async def handle_text(update, context):
         s["step"] = "media"
         await update.message.reply_text("🖼 أرسل الصور أو الفيديو", reply_markup=send_done())
 
+# =========================
+# CALLBACKS
+# =========================
 async def handle_callbacks(update, context):
     q = update.callback_query
     uid = q.from_user.id
@@ -173,8 +199,10 @@ async def handle_callbacks(update, context):
 
     if q.data == "logo_color:no":
         s["step"] = "ask_brightness"
-        await q.message.reply_text("💡 هل تريد تعديل إنارة الصور؟", reply_markup=yes_no("bright:yes", "bright:no"))
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
+
+    # ==== باقي الكود الأصلي بدون تغيير ====
 
     if q.data == "bright:yes":
         s["brightness"] = True
@@ -228,7 +256,7 @@ async def handle_callbacks(update, context):
         s["inputs"] = []
         s["ad_text"] = None
         s["step"] = "ask_brightness"
-        await q.message.reply_text("💡 هل تريد تعديل إنارة الصور؟", reply_markup=yes_no("bright:yes", "bright:no"))
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
     if q.data == "custom:end":

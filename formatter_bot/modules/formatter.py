@@ -37,19 +37,6 @@ CUSTOM_FOOTER = """
 """
 
 # =========================
-# 🔥 جديد: تعديل لون الشعار
-# =========================
-def adjust_logo_color(path, percent):
-    img = Image.open(path).convert("RGBA")
-    factor = 1 + percent / 100
-    img = ImageEnhance.Color(img).enhance(factor)
-    img = ImageEnhance.Contrast(img).enhance(factor)
-    img = ImageEnhance.Sharpness(img).enhance(factor)
-    out = tempfile.mktemp(suffix=".png")
-    img.save(out, "PNG")
-    return out
-
-# =========================
 # تحسين الشعار
 # =========================
 def enhance_logo_colors(path):
@@ -123,7 +110,6 @@ async def start_custom(update, context):
         "logo": None,
         "width": None,
         "opacity": None,
-        "logo_color_percent": 0,  # 🔥 جديد
         "brightness": False,
         "brightness_value": 0,
         "ai": False,
@@ -159,12 +145,6 @@ async def handle_text(update, context):
 
     if s["step"] == "opacity":
         s["opacity"] = int(txt)
-        s["step"] = "ask_logo_color"
-        await update.message.reply_text("🎨 هل تريد تعديل ألوان الشعار؟", reply_markup=yes_no("logo_color:yes", "logo_color:no"))
-        return
-
-    if s["step"] == "logo_color_value":
-        s["logo_color_percent"] = int(txt)
         s["step"] = "ask_brightness"
         await update.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
@@ -181,6 +161,49 @@ async def handle_text(update, context):
         await update.message.reply_text("🖼 أرسل الصور أو الفيديو", reply_markup=send_done())
 
 # =========================
+# MEDIA
+# =========================
+async def handle_media(update, context):
+    uid = update.effective_user.id
+    s = sessions.get(uid)
+    if not s:
+        return
+
+    msg = update.message
+
+    if s["step"] == "logo":
+        f = await (msg.photo[-1].get_file() if msg.photo else msg.document.get_file())
+        p = tempfile.mktemp()
+        await f.download_to_drive(p)
+        s["logo"] = enhance_logo_colors(p)
+        s["step"] = "width"
+        await msg.reply_text("📏 أرسل عرض الشعار (0.10 – 1.00)")
+        return
+
+    if s["step"] != "media":
+        return
+
+    if msg.photo:
+        f = await msg.photo[-1].get_file()
+        p = tempfile.mktemp(suffix=".jpg")
+        await f.download_to_drive(p)
+        s["inputs"].append(("photo", p))
+
+    elif msg.document:
+        f = await msg.document.get_file()
+        ext = os.path.splitext(msg.document.file_name or "")[-1].lower()
+        p = tempfile.mktemp(suffix=ext)
+        await f.download_to_drive(p)
+        kind = "video_doc" if (msg.document.mime_type or "").startswith("video") else "photo_doc"
+        s["inputs"].append((kind, p))
+
+    elif msg.video:
+        f = await msg.video.get_file()
+        p = tempfile.mktemp(suffix=".mp4")
+        await f.download_to_drive(p)
+        s["inputs"].append(("video", p))
+
+# =========================
 # CALLBACKS
 # =========================
 async def handle_callbacks(update, context):
@@ -190,18 +213,6 @@ async def handle_callbacks(update, context):
     await q.answer()
     if not s:
         return
-
-    if q.data == "logo_color:yes":
-        s["step"] = "logo_color_value"
-        await q.message.reply_text("كم نسبة التعديل؟ (مثال: 20 أو -20)")
-        return
-
-    if q.data == "logo_color:no":
-        s["step"] = "ask_brightness"
-        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
-        return
-
-    # باقي الكود الأصلي كما هو 👇
 
     if q.data == "bright:yes":
         s["brightness"] = True
@@ -261,3 +272,74 @@ async def handle_callbacks(update, context):
     if q.data == "custom:end":
         sessions.pop(uid, None)
         await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
+
+# =========================
+# FINISH (أضيف فقط إرسال ألبوم)
+# =========================
+async def finish_custom(update, context):
+    q = update.callback_query
+    uid = q.from_user.id
+    s = sessions.get(uid)
+    await q.answer()
+
+    if not s or not s["inputs"]:
+        await q.message.reply_text("⚠️ لم يتم إرسال ملفات")
+        return
+
+    await q.message.reply_text("⏳ انتظر، جاري المعالجة...")
+
+    if s["with_format"] and s["ad_text"]:
+        await q.message.reply_text(
+            f"{HEADER}\n{s['ad_text']}\n{CUSTOM_FOOTER}"
+        )
+
+    media_group = []
+    video_files = []
+
+    async def process_item(kind, path):
+        if kind.startswith("photo"):
+            img = Image.open(path).convert("RGB")
+
+            if s["brightness"]:
+                img = ImageEnhance.Brightness(img).enhance(1 + s["brightness_value"] / 100)
+
+            if s["ai"]:
+                img = enhance_strong(img) if s["ai_mode"] == "strong" else enhance_fast(img)
+
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=92)
+            buf.seek(0)
+
+            tmp = tempfile.mktemp(suffix=".jpg")
+            with open(tmp, "wb") as f:
+                f.write(buf.read())
+
+            out = apply_custom_logo(tmp, s["logo"], s["width"], s["opacity"])
+            media_group.append(InputMediaPhoto(open(out, "rb")))
+        else:
+            outv = apply_custom_logo_video(path, s["logo"], s["width"], s["opacity"])
+            video_files.append(open(outv, "rb"))
+
+    for kind, path in s["inputs"]:
+        await process_item(kind, path)
+
+    if media_group:
+        await q.message.reply_media_group(media_group)
+
+    for vf in video_files:
+        await q.message.reply_video(vf)
+
+    await q.message.reply_text(
+        "✅ تمت المعالجة بنجاح",
+        reply_markup=after_done()
+    )
+
+# =========================
+# REGISTER
+# =========================
+def register(app):
+    app.add_handler(CallbackQueryHandler(start_custom, pattern="^custom:start$"))
+    app.add_handler(CallbackQueryHandler(finish_custom, pattern="^custom:finish$"))
+    app.add_handler(CallbackQueryHandler(handle_callbacks))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, handle_media))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

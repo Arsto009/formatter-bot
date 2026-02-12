@@ -242,3 +242,52 @@ async def handle_callbacks(update, context):
     if q.data == "custom:end":
         sessions.pop(uid, None)
         await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
+
+# =========================
+# FINISH + إرسال ألبوم
+# =========================
+async def finish_custom(update, context):
+    q = update.callback_query
+    uid = q.from_user.id
+    s = sessions.get(uid)
+    await q.answer()
+
+    if not s or not s["inputs"]:
+        await q.message.reply_text("⚠️ لم يتم إرسال ملفات")
+        return
+
+    await q.message.reply_text("⏳ انتظر، جاري المعالجة...")
+
+    if s["with_format"] and s["ad_text"]:
+        await q.message.reply_text(
+            f"{HEADER}\n{s['ad_text']}\n{CUSTOM_FOOTER}"
+        )
+
+    media_group = []
+    video_files = []
+
+    for kind, path in s["inputs"]:
+        if kind.startswith("photo"):
+            out = apply_custom_logo(path, s["logo"], s["width"], s["opacity"])
+            media_group.append(InputMediaPhoto(open(out, "rb")))
+        else:
+            outv = apply_custom_logo_video(path, s["logo"], s["width"], s["opacity"])
+            video_files.append(open(outv, "rb"))
+
+    if media_group:
+        await q.message.reply_media_group(media_group)
+
+    for vf in video_files:
+        await q.message.reply_video(vf)
+
+    await q.message.reply_text(
+        "✅ تمت المعالجة بنجاح",
+        reply_markup=after_done()
+    )
+
+def register(app):
+    app.add_handler(CallbackQueryHandler(start_custom, pattern="^custom:start$"))
+    app.add_handler(CallbackQueryHandler(finish_custom, pattern="^custom:finish$"))
+    app.add_handler(CallbackQueryHandler(handle_callbacks))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, handle_media))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

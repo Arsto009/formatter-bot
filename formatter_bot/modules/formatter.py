@@ -15,18 +15,12 @@ from settings import HEADER
 from core.keyboard import main_keyboard
 from modules.designer import apply_custom_logo, apply_custom_logo_video
 
-# =========================
-# Queue إعدادات
-# =========================
 MAX_FAST_SIZE = 2.3 * 1024 * 1024
 heavy_queue = deque()
 processing_queue = False
 
 sessions = {}
 
-# =========================
-# فوتر الإعلان
-# =========================
 CUSTOM_FOOTER = """
 ---------------------------
 بالامكان الاستفسار عن تفاصيل أكثر
@@ -36,9 +30,6 @@ CUSTOM_FOOTER = """
 07764404477
 """
 
-# =========================
-# تحسين الشعار
-# =========================
 def enhance_logo_colors(path):
     img = Image.open(path).convert("RGBA")
     img = ImageEnhance.Color(img).enhance(1.6)
@@ -47,9 +38,6 @@ def enhance_logo_colors(path):
     img.save(out, "PNG")
     return out
 
-# =========================
-# تحسين الصور
-# =========================
 def enhance_fast(img):
     img = img.filter(ImageFilter.SHARPEN)
     img = ImageEnhance.Contrast(img).enhance(1.1)
@@ -61,9 +49,6 @@ def enhance_strong(img):
     img = ImageEnhance.Contrast(img).enhance(1.18)
     return img
 
-# =========================
-# Queue Worker
-# =========================
 async def process_queue():
     global processing_queue
     if processing_queue:
@@ -74,9 +59,6 @@ async def process_queue():
         await job()
     processing_queue = False
 
-# =========================
-# Keyboards
-# =========================
 def yes_no(y, n):
     return InlineKeyboardMarkup([[
         InlineKeyboardButton("✅ نعم", callback_data=y),
@@ -100,9 +82,6 @@ def after_done():
         [InlineKeyboardButton("⛔ إنهاء العملية", callback_data="custom:end")]
     ])
 
-# =========================
-# Start
-# =========================
 async def start_custom(update, context):
     uid = update.effective_user.id
     sessions[uid] = {
@@ -121,9 +100,6 @@ async def start_custom(update, context):
     await update.callback_query.answer()
     await update.callback_query.message.reply_text("📎 أرسل شعارك الآن")
 
-# =========================
-# TEXT
-# =========================
 async def handle_text(update, context):
     uid = update.effective_user.id
     txt = update.message.text.strip()
@@ -160,9 +136,6 @@ async def handle_text(update, context):
         s["step"] = "media"
         await update.message.reply_text("🖼 أرسل الصور أو الفيديو", reply_markup=send_done())
 
-# =========================
-# MEDIA
-# =========================
 async def handle_media(update, context):
     uid = update.effective_user.id
     s = sessions.get(uid)
@@ -203,9 +176,6 @@ async def handle_media(update, context):
         await f.download_to_drive(p)
         s["inputs"].append(("video", p))
 
-# =========================
-# CALLBACKS
-# =========================
 async def handle_callbacks(update, context):
     q = update.callback_query
     uid = q.from_user.id
@@ -214,71 +184,61 @@ async def handle_callbacks(update, context):
     if not s:
         return
 
+    if q.data == "bright:yes":
+        s["brightness"] = True
+        s["step"] = "brightness_value"
+        await q.message.reply_text("💡 كم نسبة الإنارة؟")
+        return
+
+    if q.data == "bright:no":
+        s["brightness"] = False
+        s["step"] = "ask_ai"
+        await q.message.reply_text("🤖 هل تريد تحسين الصور؟", reply_markup=yes_no("ai:yes", "ai:no"))
+        return
+
+    if q.data == "ai:yes":
+        s["ai"] = True
+        s["step"] = "ask_ai_mode"
+        await q.message.reply_text("⚙️ اختر نوع التحسين", reply_markup=speed_kb())
+        return
+
+    if q.data == "ai:no":
+        s["ai"] = False
+        s["step"] = "ask_format"
+        await q.message.reply_text("🧾 هل تريد تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
+        return
+
+    if q.data == "ai:fast":
+        s["ai_mode"] = "fast"
+        s["step"] = "ask_format"
+        await q.message.reply_text("🧾 هل تريد تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
+        return
+
+    if q.data == "ai:strong":
+        s["ai_mode"] = "strong"
+        s["step"] = "ask_format"
+        await q.message.reply_text("🧾 هل تريد تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
+        return
+
+    if q.data == "fmt:yes":
+        s["with_format"] = True
+        s["step"] = "ad_text"
+        await q.message.reply_text("✏️ أرسل نص الإعلان")
+        return
+
+    if q.data == "fmt:no":
+        s["with_format"] = False
+        s["step"] = "media"
+        await q.message.reply_text("🖼 أرسل الصور أو الفيديو", reply_markup=send_done())
+        return
+
+    if q.data == "custom:more":
+        s["inputs"] = []
+        s["ad_text"] = None
+        s["step"] = "ask_brightness"
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
+        return
+
     if q.data == "custom:end":
         sessions.pop(uid, None)
         await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
-
-# =========================
-# FINISH (الترتيب النهائي)
-# =========================
-async def finish_custom(update, context):
-    q = update.callback_query
-    uid = q.from_user.id
-    s = sessions.get(uid)
-    await q.answer()
-
-    if not s or not s["inputs"]:
-        await q.message.reply_text("⚠️ لم يتم إرسال ملفات")
-        return
-
-    await q.message.reply_text("⏳ انتظر، جاري المعالجة...")
-
-    if s["with_format"] and s["ad_text"]:
-        await q.message.reply_text(
-            f"{HEADER}\n{s['ad_text']}\n{CUSTOM_FOOTER}"
-        )
-
-    media_group = []
-    video_files = []
-
-    async def process_item(kind, path):
-        if kind.startswith("photo"):
-            img = Image.open(path).convert("RGB")
-            buf = BytesIO()
-            img.save(buf, format="JPEG", quality=92)
-            buf.seek(0)
-
-            tmp = tempfile.mktemp(suffix=".jpg")
-            with open(tmp, "wb") as f:
-                f.write(buf.read())
-
-            out = apply_custom_logo(tmp, s["logo"], s["width"], s["opacity"])
-            media_group.append(InputMediaPhoto(open(out, "rb")))
-        else:
-            outv = apply_custom_logo_video(path, s["logo"], s["width"], s["opacity"])
-            video_files.append(open(outv, "rb"))
-
-    for kind, path in s["inputs"]:
-        await process_item(kind, path)
-
-    # 🔥 الميزة الجديدة فقط: إرسال الصور كألبوم
-    if media_group:
-        await q.message.reply_media_group(media_group)
-
-    for vf in video_files:
-        await q.message.reply_video(vf)
-
-    await q.message.reply_text(
-        "✅ تمت المعالجة بنجاح",
-        reply_markup=after_done()
-    )
-
-# =========================
-# REGISTER
-# =========================
-def register(app):
-    app.add_handler(CallbackQueryHandler(start_custom, pattern="^custom:start$"))
-    app.add_handler(CallbackQueryHandler(finish_custom, pattern="^custom:finish$"))
-    app.add_handler(CallbackQueryHandler(handle_callbacks))
-    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, handle_media))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

@@ -161,7 +161,7 @@ async def start_custom(update, context):
     saved = load_logo_settings(uid)
     
     sessions[uid] = {
-        "step": "media" if saved else "logo",
+        "step": "ask_brightness" if saved else "logo",  # 🔥 التغيير هنا: إذا في حفظ → يبدأ من الإنارة
         "logo": saved.get("logo_path") if saved else None,
         "width": saved.get("width") if saved else None,
         "opacity": saved.get("opacity") if saved else None,
@@ -178,12 +178,14 @@ async def start_custom(update, context):
     await update.callback_query.answer()
     
     if saved:
+        # 🔥 إذا في حفظ → يبدأ من سؤال الإنارة مباشرة
         await update.callback_query.message.reply_text(
             "✅ تم تحميل إعدادات الشعار المحفوظة\n"
-            "🖼 أرسل الصور أو الفيديو الآن",
-            reply_markup=send_done()
+            "💡 هل تريد تعديل الإنارة؟",
+            reply_markup=yes_no("bright:yes", "bright:no")
         )
     else:
+        # إذا ما في حفظ → يطلب الشعار
         await update.callback_query.message.reply_text("📎 أرسل شعارك الآن")
 
 # =========================
@@ -380,8 +382,12 @@ async def handle_callbacks(update, context):
     if q.data == "custom:more":
         s["inputs"] = []
         s["ad_text"] = None
-        s["step"] = "ask_brightness"
-        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
+        s["step"] = "ask_brightness"  # 🔥 في "المزيد" يبدأ من الإنارة (لأن الشعار محفوظ)
+        await q.message.reply_text(
+            "🔄 لنبدأ مرة أخرى\n"
+            "💡 هل تريد تعديل الإنارة؟",
+            reply_markup=yes_no("bright:yes", "bright:no")
+        )
         return
 
     if q.data == "custom:end":
@@ -399,7 +405,7 @@ async def handle_callbacks(update, context):
         return
 
 # =========================
-# FINISH (كما هو بدون تغيير)
+# FINISH
 # =========================
 async def finish_custom(update, context):
     q = update.callback_query
@@ -490,4 +496,4 @@ async def clear_settings_handler(update, context):
     await q.message.reply_text(
         "🗑 تم مسح الإعدادات المحفوظة",
         reply_markup=main_keyboard(uid)
-    )
+        )

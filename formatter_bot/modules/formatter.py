@@ -1,9 +1,6 @@
 import os
 import tempfile
 import shutil
-import requests
-import base64
-import time
 from collections import deque
 from io import BytesIO
 
@@ -19,12 +16,6 @@ from settings import HEADER
 from core.keyboard import main_keyboard
 from modules.designer import apply_custom_logo, apply_custom_logo_video
 from core.storage import load_data, save_data
-
-# =========================
-# إعدادات الذكاء الاصطناعي - Replicate (أفضل تحسين واقعي)
-# =========================
-REPLICATE_API_TOKEN = "r8_4YFcKZpfUQl7Y6Hj3Xw2BnT9mL5sRqV"  # توكنك
-REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
 
 # =========================
 # Queue إعدادات
@@ -86,7 +77,7 @@ def clear_logo_settings(user_id):
         save_data(data)
 
 # =========================
-# تعديل لون الشعار بنسبة
+# 🔥 جديد: تعديل لون الشعار بنسبة
 # =========================
 def adjust_logo_color(path, percent):
     img = Image.open(path).convert("RGBA")
@@ -110,215 +101,17 @@ def enhance_logo_colors(path):
     return out
 
 # =========================
-# رفع الصورة لموقع مؤقت
-# =========================
-def upload_to_tmp(image_path):
-    """يرفع الصورة لموقع مؤقت ويعيد الرابط"""
-    try:
-        with open(image_path, 'rb') as f:
-            files = {'file': f}
-            response = requests.post(
-                "https://tmpfiles.org/api/v1/upload",
-                files=files
-            )
-        
-        if response.status_code == 200:
-            # تحويل الرابط لرابط مباشر
-            url = response.json()['data']['url']
-            # tmpfiles.org يعطي رابط مثل https://tmpfiles.org/123/abc.jpg
-            # نحتاج نحوله لرابط مباشر https://tmpfiles.org/dl/123/abc.jpg
-            if 'tmpfiles.org/' in url:
-                file_id = url.split('/')[-2] + '/' + url.split('/')[-1]
-                direct_url = f"https://tmpfiles.org/dl/{file_id}"
-                return direct_url
-            return url
-        return None
-    except Exception as e:
-        print(f"خطأ في رفع الصورة: {e}")
-        return None
-
-# =========================
-# تحسين الصور - احترافي 4K (ذكاء اصطناعي واقعي)
-# =========================
-def enhance_image_professional(image_path):
-    """
-    يحسن الصورة باحترافية عالية جداً:
-    - دقة 4K
-    - واقعية كأنها من كاميرا نيكون
-    - ناعمة وسلسة بدون غواش
-    - إزالة كل التشويش
-    """
-    try:
-        print("🎨 جاري تحسين الصورة بجودة 4K احترافية...")
-        
-        # 1. رفع الصورة
-        image_url = upload_to_tmp(image_path)
-        if not image_url:
-            print("⚠️ فشل رفع الصورة")
-            return enhance_4k_local(image_path)
-        
-        # 2. استخدام أفضل نموذج للتحسين الواقعي
-        headers = {
-            "Authorization": f"Token {REPLICATE_API_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        
-        # نموذج Real-ESRGAN (أفضل نموذج للصور الواقعية)
-        data = {
-            "version": "42fed1c4974146e4a3f3d1c2d7d1c2d7",  # Real-ESRGAN
-            "input": {
-                "image": image_url,
-                "scale": 4,  # تكبير 4 مرات (4K)
-                "face_enhance": True,  # تحسين الوجوه
-                "background_enhance": True,  # تحسين الخلفية
-                "suffix": "_enhanced",
-                "model": "RealESRGAN_x4plus",  # نموذج 4x
-                "tile_size": 400,  # حجم المعالجة
-                "preprocess": True
-            }
-        }
-        
-        # بدء التحسين
-        response = requests.post(REPLICATE_API_URL, headers=headers, json=data)
-        
-        if response.status_code == 201:
-            prediction_id = response.json()['id']
-            
-            # انتظار النتيجة
-            max_attempts = 60  # انتظار أطول للجودة العالية
-            for attempt in range(max_attempts):
-                status_response = requests.get(
-                    f"{REPLICATE_API_URL}/{prediction_id}",
-                    headers=headers
-                )
-                status = status_response.json()
-                
-                if status['status'] == 'succeeded':
-                    # تم التحسين بنجاح
-                    if 'output' in status:
-                        enhanced_url = status['output']
-                        if isinstance(enhanced_url, list):
-                            enhanced_url = enhanced_url[0]
-                        
-                        # تحميل الصورة المحسنة
-                        img_response = requests.get(enhanced_url)
-                        
-                        output_path = tempfile.mktemp(suffix="_4k.jpg")
-                        with open(output_path, 'wb') as f:
-                            f.write(img_response.content)
-                        
-                        # تطبيق تحسين إضافي للنعومة والواقعية
-                        output_path = final_touch(output_path)
-                        
-                        print("✅ تم تحسين الصورة بجودة 4K احترافية!")
-                        return output_path
-                
-                elif status['status'] == 'failed':
-                    print("⚠️ فشل التحسين، نستخدم الطريقة المحلية")
-                    break
-                
-                time.sleep(3)  # انتظار 3 ثواني بين كل محاولة
-        
-        # إذا فشل كل شيء، نستخدم التحسين المحلي
-        return enhance_4k_local(image_path)
-        
-    except Exception as e:
-        print(f"❌ خطأ في التحسين: {e}")
-        return enhance_4k_local(image_path)
-
-# =========================
-# تحسين 4K محلي (احتياطي)
-# =========================
-def enhance_4k_local(image_path):
-    """تحسين محلي بجودة عالية إذا فشل API"""
-    try:
-        img = Image.open(image_path).convert("RGB")
-        
-        # حساب أبعاد 4K (3840x2160)
-        target_width = 3840
-        target_height = 2160
-        
-        # تكبير الصورة مع الحفاظ على النسبة
-        ratio = min(target_width / img.width, target_height / img.height)
-        new_size = (int(img.width * ratio), int(img.height * ratio))
-        img = img.resize(new_size, Image.LANCZOS)
-        
-        # قص الصورة لتناسب 4K إذا لزم الأمر
-        if new_size[0] > target_width or new_size[1] > target_height:
-            left = (new_size[0] - target_width) // 2
-            top = (new_size[1] - target_height) // 2
-            right = left + target_width
-            bottom = top + target_height
-            img = img.crop((left, top, right, bottom))
-        elif new_size[0] < target_width or new_size[1] < target_height:
-            # إنشاء خلفية سوداء وتوسيط الصورة
-            new_img = Image.new('RGB', (target_width, target_height), (0, 0, 0))
-            paste_x = (target_width - new_size[0]) // 2
-            paste_y = (target_height - new_size[1]) // 2
-            new_img.paste(img, (paste_x, paste_y))
-            img = new_img
-        
-        # تطبيق تحسينات احترافية
-        # 1. تقليل التشويش (ناعم)
-        img = img.filter(ImageFilter.MedianFilter(size=3))
-        
-        # 2. تحسين الحدة (بدون غواش)
-        img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=80, threshold=2))
-        
-        # 3. تحسين التباين (واقعي)
-        enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.15)
-        
-        # 4. تحسين الألوان (طبيعي)
-        enhancer = ImageEnhance.Color(img)
-        img = enhancer.enhance(1.1)
-        
-        # 5. تحسين الوضوح (سلس)
-        enhancer = ImageEnhance.Sharpness(img)
-        img = enhancer.enhance(1.2)
-        
-        output_path = tempfile.mktemp(suffix="_4k_local.jpg")
-        img.save(output_path, "JPEG", quality=100, subsampling=0)
-        
-        return output_path
-        
-    except Exception as e:
-        print(f"خطأ في التحسين المحلي: {e}")
-        return image_path
-
-# =========================
-# اللمسة النهائية (ناعمة كالماء)
-# =========================
-def final_touch(image_path):
-    """يجعل الصورة ناعمة وسلسة كالماء"""
-    try:
-        img = Image.open(image_path).convert("RGB")
-        
-        # تقليل خفيف جداً للتشويش (نعومة)
-        img = img.filter(ImageFilter.SMOOTH_MORE)
-        
-        # تحسين الحدة بشكل طبيعي
-        img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=50, threshold=0))
-        
-        # تحسين الألوان لتكون واقعية
-        enhancer = ImageEnhance.Color(img)
-        img = enhancer.enhance(1.05)
-        
-        output_path = tempfile.mktemp(suffix="_final.jpg")
-        img.save(output_path, "JPEG", quality=100, subsampling=0)
-        
-        return output_path
-        
-    except:
-        return image_path
-
-# =========================
-# تحسين الصور - سريع (عادي)
+# تحسين الصور
 # =========================
 def enhance_fast(img):
     img = img.filter(ImageFilter.SHARPEN)
     img = ImageEnhance.Contrast(img).enhance(1.1)
-    img = ImageEnhance.Color(img).enhance(1.1)
+    return img
+
+def enhance_strong(img):
+    img = img.filter(ImageFilter.MedianFilter(size=3))
+    img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=140))
+    img = ImageEnhance.Contrast(img).enhance(1.18)
     return img
 
 # =========================
@@ -346,7 +139,7 @@ def yes_no(y, n):
 def speed_kb():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⚡ سريع", callback_data="ai:fast")],
-        [InlineKeyboardButton("📷 4K احترافي (واقعي)", callback_data="ai:strong")]
+        [InlineKeyboardButton("💎 قوي", callback_data="ai:strong")]
     ])
 
 def send_done():
@@ -368,7 +161,7 @@ async def start_custom(update, context):
     saved = load_logo_settings(uid)
     
     sessions[uid] = {
-        "step": "ask_brightness" if saved else "logo",
+        "step": "media" if saved else "logo",
         "logo": saved.get("logo_path") if saved else None,
         "width": saved.get("width") if saved else None,
         "opacity": saved.get("opacity") if saved else None,
@@ -387,8 +180,8 @@ async def start_custom(update, context):
     if saved:
         await update.callback_query.message.reply_text(
             "✅ تم تحميل إعدادات الشعار المحفوظة\n"
-            "💡 هل تريد تعديل الإنارة؟",
-            reply_markup=yes_no("bright:yes", "bright:no")
+            "🖼 أرسل الصور أو الفيديو الآن",
+            reply_markup=send_done()
         )
     else:
         await update.callback_query.message.reply_text("📎 أرسل شعارك الآن")
@@ -588,11 +381,7 @@ async def handle_callbacks(update, context):
         s["inputs"] = []
         s["ad_text"] = None
         s["step"] = "ask_brightness"
-        await q.message.reply_text(
-            "🔄 لنبدأ مرة أخرى\n"
-            "💡 هل تريد تعديل الإنارة؟",
-            reply_markup=yes_no("bright:yes", "bright:no")
-        )
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
     if q.data == "custom:end":
@@ -610,7 +399,7 @@ async def handle_callbacks(update, context):
         return
 
 # =========================
-# FINISH - المعالجة النهائية
+# FINISH (كما هو بدون تغيير)
 # =========================
 async def finish_custom(update, context):
     q = update.callback_query
@@ -634,29 +423,23 @@ async def finish_custom(update, context):
 
     async def process_item(kind, path):
         if kind.startswith("photo"):
-            # إذا كان التحسين احترافي 4K
-            if s["ai"] and s["ai_mode"] == "strong":
-                # 🔥 تحسين احترافي 4K
-                enhanced_path = enhance_image_professional(path)
-                img = Image.open(enhanced_path).convert("RGB")
-            else:
-                img = Image.open(path).convert("RGB")
-                
-                if s["brightness"]:
-                    img = ImageEnhance.Brightness(img).enhance(1 + s["brightness_value"] / 100)
+            img = Image.open(path).convert("RGB")
 
-                if s["ai"] and s["ai_mode"] == "fast":
-                    img = enhance_fast(img)
+            if s["brightness"]:
+                img = ImageEnhance.Brightness(img).enhance(1 + s["brightness_value"] / 100)
+
+            if s["ai"]:
+                img = enhance_strong(img) if s["ai_mode"] == "strong" else enhance_fast(img)
 
             buf = BytesIO()
-            img.save(buf, format="JPEG", quality=100, subsampling=0)
+            img.save(buf, format="JPEG", quality=92)
             buf.seek(0)
 
             tmp = tempfile.mktemp(suffix=".jpg")
             with open(tmp, "wb") as f:
                 f.write(buf.read())
 
-            # تطبيق تعديل لون الشعار
+            # تطبيق تعديل لون الشعار هنا فقط
             logo_path = s["logo"]
             if s["logo_color_percent"] != 0:
                 logo_path = adjust_logo_color(s["logo"], s["logo_color_percent"])
@@ -664,7 +447,6 @@ async def finish_custom(update, context):
             out = apply_custom_logo(tmp, logo_path, s["width"], s["opacity"])
             media_group.append(InputMediaPhoto(open(out, "rb")))
         else:
-            # معالجة الفيديو
             logo_path = s["logo"]
             if s["logo_color_percent"] != 0:
                 logo_path = adjust_logo_color(s["logo"], s["logo_color_percent"])

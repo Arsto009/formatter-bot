@@ -4,3 +4,10 @@
 #pillow-heif#
 
 #opencv-python-headless#
+
+# 🤖 Formatter Bot - المتطلبات الأساسية
+python-telegram-bot==20.7
+Pillow==11.0.0
+pillow-heif==0.18.0
+opencv-python-headless==4.9.0.80
+requests==2.31.0

@@ -1,0 +1,5 @@
+python-telegram-bot
+requests
+Pillow
+pillow-heif
+opencv-python-headless

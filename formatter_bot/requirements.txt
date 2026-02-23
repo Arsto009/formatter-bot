@@ -19,3 +19,11 @@ requests==2.31.0                     # التواصل مع APIs الخارجية
 # ---------- أدوات تطوير (اختياري) ----------
 # black                              # تنسيق الكود
 # pylint                             # فحص الكود
+
+
+
+# python-telegram-bot
+# requests
+# Pillow
+# pillow-heif
+# opencv-python-headless

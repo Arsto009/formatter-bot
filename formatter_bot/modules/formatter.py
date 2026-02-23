@@ -5,7 +5,7 @@ import requests
 import time
 from io import BytesIO
 
-# دعم HEIC - متوافق مع pillow-heif 0.18.0
+# دعم HEIC - متوافق مع pillow-heif 0.21.0
 from pillow_heif import register_heif_opener
 register_heif_opener()
 
@@ -102,7 +102,7 @@ def upload_to_tmp(image_path):
     """رفع الصورة لموقع مؤقت"""
     try:
         with open(image_path, 'rb') as f:
-            response = requests.post("https://tmpfiles.org/api/v1/upload", files={'file': f})
+            response = requests.post("https://tmpfiles.org/api/v1/upload", files={'file': f}, timeout=30)
         if response.status_code == 200:
             url = response.json()['data']['url']
             if 'tmpfiles.org/' in url:
@@ -113,7 +113,7 @@ def upload_to_tmp(image_path):
         return None
 
 def enhance_4k_professional(image_path):
-    """تحسين احترافي 4K - متوافق مع requests 2.31.0"""
+    """تحسين احترافي 4K"""
     try:
         # محاولة Replicate أولاً
         image_url = upload_to_tmp(image_path)
@@ -128,7 +128,7 @@ def enhance_4k_professional(image_path):
             if response.status_code == 201:
                 prediction_id = response.json()['id']
                 for _ in range(30):
-                    status = requests.get(f"{REPLICATE_API_URL}/{prediction_id}", headers=headers).json()
+                    status = requests.get(f"{REPLICATE_API_URL}/{prediction_id}", headers=headers, timeout=30).json()
                     if status['status'] == 'succeeded':
                         enhanced_url = status['output'][0] if isinstance(status['output'], list) else status['output']
                         img_response = requests.get(enhanced_url, timeout=60)
@@ -140,20 +140,21 @@ def enhance_4k_professional(image_path):
                         break
                     time.sleep(2)
         
-        # تحسين محلي - متوافق مع Pillow 11.0.0
+        # تحسين محلي - متوافق مع Pillow 11.1.0
         img = Image.open(image_path).convert("RGB")
         img = img.resize((3840, 2160), ImageResampling.LANCZOS)
         img = img.filter(ImageFilter.MedianFilter(size=3))
         img = img.filter(ImageFilter.UnsharpMask(radius=1.2, percent=60))
         
         output_path = tempfile.mktemp(suffix="_4k_local.jpg")
-        img.save(output_path, "JPEG", quality=100)
+        img.save(output_path, "JPEG", quality=100, optimize=True)
         return output_path
-    except:
+    except Exception as e:
+        print(f"خطأ في التحسين: {e}")
         return image_path
 
 def enhance_fast(img):
-    """تحسين سريع - متوافق مع Pillow 11.0.0"""
+    """تحسين سريع"""
     img = img.filter(ImageFilter.SHARPEN)
     img = ImageEnhance.Contrast(img).enhance(1.1)
     img = ImageEnhance.Color(img).enhance(1.1)
@@ -165,7 +166,7 @@ def adjust_logo_color(path, percent):
     factor = 1 + percent / 100
     img = ImageEnhance.Color(img).enhance(factor)
     out = tempfile.mktemp(suffix=".png")
-    img.save(out, "PNG")
+    img.save(out, "PNG", optimize=True)
     return out
 
 def enhance_logo_colors(path):
@@ -173,11 +174,11 @@ def enhance_logo_colors(path):
     img = Image.open(path).convert("RGBA")
     img = ImageEnhance.Color(img).enhance(1.6)
     out = tempfile.mktemp(suffix=".png")
-    img.save(out, "PNG")
+    img.save(out, "PNG", optimize=True)
     return out
 
 # =========================
-# دوال البوت
+# Start Custom
 # =========================
 async def start_custom(update, context):
     uid = update.effective_user.id
@@ -208,6 +209,9 @@ async def start_custom(update, context):
     else:
         await update.callback_query.message.reply_text("📎 أرسل شعارك")
 
+# =========================
+# Handle Text
+# =========================
 async def handle_text(update, context):
     uid = update.effective_user.id
     txt = update.message.text.strip()
@@ -221,47 +225,57 @@ async def handle_text(update, context):
     if not s:
         return
 
-    if s["step"] == "width":
-        try:
-            s["width"] = float(txt)
-            s["step"] = "opacity"
-            await update.message.reply_text("🌫 نسبة الشفافية (0–100)")
-        except ValueError:
-            await update.message.reply_text("❌ رقم غير صحيح")
-        return
+    steps = {
+        "width": lambda: self._process_width(txt, s, update),
+        "opacity": lambda: self._process_opacity(txt, s, update),
+        "logo_color_value": lambda: self._process_color_value(txt, s, update),
+        "brightness_value": lambda: self._process_brightness(txt, s, update),
+        "ad_text": lambda: self._process_ad_text(txt, s, update)
+    }
+    
+    if s["step"] in steps:
+        await steps[s["step"]]()
 
-    if s["step"] == "opacity":
-        try:
-            s["opacity"] = int(txt)
-            s["step"] = "ask_logo_color"
-            await update.message.reply_text("🎨 تعديل لون الشعار؟", reply_markup=yes_no("logo_color:yes", "logo_color:no"))
-        except ValueError:
-            await update.message.reply_text("❌ رقم غير صحيح")
-        return
+async def _process_width(txt, s, update):
+    try:
+        s["width"] = float(txt)
+        s["step"] = "opacity"
+        await update.message.reply_text("🌫 نسبة الشفافية (0–100)")
+    except ValueError:
+        await update.message.reply_text("❌ رقم غير صحيح")
 
-    if s["step"] == "logo_color_value":
-        try:
-            s["logo_color_percent"] = int(txt)
-            s["step"] = "ask_save_settings"
-            await update.message.reply_text("💾 حفظ الإعدادات؟", reply_markup=yes_no("save:yes", "save:no"))
-        except ValueError:
-            await update.message.reply_text("❌ رقم غير صحيح")
-        return
+async def _process_opacity(txt, s, update):
+    try:
+        s["opacity"] = int(txt)
+        s["step"] = "ask_logo_color"
+        await update.message.reply_text("🎨 تعديل لون الشعار؟", reply_markup=yes_no("logo_color:yes", "logo_color:no"))
+    except ValueError:
+        await update.message.reply_text("❌ رقم غير صحيح")
 
-    if s["step"] == "brightness_value":
-        try:
-            s["brightness_value"] = int(txt)
-            s["step"] = "ask_ai"
-            await update.message.reply_text("🤖 تحسين الصور؟", reply_markup=yes_no("ai:yes", "ai:no"))
-        except ValueError:
-            await update.message.reply_text("❌ رقم غير صحيح")
-        return
+async def _process_color_value(txt, s, update):
+    try:
+        s["logo_color_percent"] = int(txt)
+        s["step"] = "ask_save_settings"
+        await update.message.reply_text("💾 حفظ الإعدادات؟", reply_markup=yes_no("save:yes", "save:no"))
+    except ValueError:
+        await update.message.reply_text("❌ رقم غير صحيح")
 
-    if s["step"] == "ad_text":
-        s["ad_text"] = txt
-        s["step"] = "media"
-        await update.message.reply_text("🖼 أرسل الصور")
+async def _process_brightness(txt, s, update):
+    try:
+        s["brightness_value"] = int(txt)
+        s["step"] = "ask_ai"
+        await update.message.reply_text("🤖 تحسين الصور؟", reply_markup=yes_no("ai:yes", "ai:no"))
+    except ValueError:
+        await update.message.reply_text("❌ رقم غير صحيح")
 
+async def _process_ad_text(txt, s, update):
+    s["ad_text"] = txt
+    s["step"] = "media"
+    await update.message.reply_text("🖼 أرسل الصور")
+
+# =========================
+# Handle Media
+# =========================
 async def handle_media(update, context):
     uid = update.effective_user.id
     s = sessions.get(uid)
@@ -296,6 +310,9 @@ async def handle_media(update, context):
         s["inputs"].append(("photo", p))
         await msg.reply_text(f"✅ تم استلام {len(s['inputs'])}", reply_markup=send_done())
 
+# =========================
+# Handle Callbacks
+# =========================
 async def handle_callbacks(update, context):
     q = update.callback_query
     uid = q.from_user.id
@@ -304,79 +321,103 @@ async def handle_callbacks(update, context):
     if not s:
         return
 
-    if q.data == "logo_color:yes":
-        s["step"] = "logo_color_value"
-        await q.message.reply_text("كم نسبة التعديل؟")
+    callbacks = {
+        "logo_color:yes": lambda: self._ask_color_value(q, s),
+        "logo_color:no": lambda: self._skip_color(q, s),
+        "save:yes": lambda: self._save_settings(q, uid, s),
+        "save:no": lambda: self._skip_save(q, s),
+        "bright:yes": lambda: self._ask_brightness(q, s),
+        "bright:no": lambda: self._skip_brightness(q, s),
+        "ai:yes": lambda: self._ask_ai_mode(q, s),
+        "ai:no": lambda: self._skip_ai(q, s),
+        "ai:fast": lambda: self._set_ai_fast(q, s),
+        "ai:strong": lambda: self._set_ai_strong(q, s),
+        "fmt:yes": lambda: self._ask_ad_text(q, s),
+        "fmt:no": lambda: self._skip_format(q, s),
+        "custom:more": lambda: self._more(q, s),
+        "custom:end": lambda: self._end(q, uid),
+        "custom:clear_settings": lambda: self._clear_settings(q, uid)
+    }
+    
+    if q.data in callbacks:
+        await callbacks[q.data]()
 
-    elif q.data == "logo_color:no":
-        s["logo_color_percent"] = 0
-        s["step"] = "ask_save_settings"
-        await q.message.reply_text("💾 حفظ الإعدادات؟", reply_markup=yes_no("save:yes", "save:no"))
+async def _ask_color_value(q, s):
+    s["step"] = "logo_color_value"
+    await q.message.reply_text("كم نسبة التعديل؟")
 
-    elif q.data == "save:yes":
-        save_logo_settings(uid, s["logo"], s["width"], s["opacity"], s.get("logo_color_percent", 0))
-        s["step"] = "ask_brightness"
-        await q.message.reply_text("✅ تم الحفظ\n💡 تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
+async def _skip_color(q, s):
+    s["logo_color_percent"] = 0
+    s["step"] = "ask_save_settings"
+    await q.message.reply_text("💾 حفظ الإعدادات؟", reply_markup=yes_no("save:yes", "save:no"))
 
-    elif q.data == "save:no":
-        s["step"] = "ask_brightness"
-        await q.message.reply_text("💡 تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
+async def _save_settings(q, uid, s):
+    save_logo_settings(uid, s["logo"], s["width"], s["opacity"], s.get("logo_color_percent", 0))
+    s["step"] = "ask_brightness"
+    await q.message.reply_text("✅ تم الحفظ\n💡 تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
 
-    elif q.data == "bright:yes":
-        s["brightness"] = True
-        s["step"] = "brightness_value"
-        await q.message.reply_text("💡 نسبة الإنارة؟")
+async def _skip_save(q, s):
+    s["step"] = "ask_brightness"
+    await q.message.reply_text("💡 تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
 
-    elif q.data == "bright:no":
-        s["brightness"] = False
-        s["step"] = "ask_ai"
-        await q.message.reply_text("🤖 تحسين الصور؟", reply_markup=yes_no("ai:yes", "ai:no"))
+async def _ask_brightness(q, s):
+    s["brightness"] = True
+    s["step"] = "brightness_value"
+    await q.message.reply_text("💡 نسبة الإنارة؟")
 
-    elif q.data == "ai:yes":
-        s["ai"] = True
-        s["step"] = "ask_ai_mode"
-        await q.message.reply_text("⚙️ نوع التحسين", reply_markup=speed_kb())
+async def _skip_brightness(q, s):
+    s["brightness"] = False
+    s["step"] = "ask_ai"
+    await q.message.reply_text("🤖 تحسين الصور؟", reply_markup=yes_no("ai:yes", "ai:no"))
 
-    elif q.data == "ai:no":
-        s["ai"] = False
-        s["step"] = "ask_format"
-        await q.message.reply_text("🧾 تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
+async def _ask_ai_mode(q, s):
+    s["ai"] = True
+    s["step"] = "ask_ai_mode"
+    await q.message.reply_text("⚙️ نوع التحسين", reply_markup=speed_kb())
 
-    elif q.data == "ai:fast":
-        s["ai_mode"] = "fast"
-        s["step"] = "ask_format"
-        await q.message.reply_text("🧾 تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
+async def _skip_ai(q, s):
+    s["ai"] = False
+    s["step"] = "ask_format"
+    await q.message.reply_text("🧾 تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
 
-    elif q.data == "ai:strong":
-        s["ai_mode"] = "strong"
-        s["step"] = "ask_format"
-        await q.message.reply_text("🧾 تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
+async def _set_ai_fast(q, s):
+    s["ai_mode"] = "fast"
+    s["step"] = "ask_format"
+    await q.message.reply_text("🧾 تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
 
-    elif q.data == "fmt:yes":
-        s["with_format"] = True
-        s["step"] = "ad_text"
-        await q.message.reply_text("✏️ نص الإعلان")
+async def _set_ai_strong(q, s):
+    s["ai_mode"] = "strong"
+    s["step"] = "ask_format"
+    await q.message.reply_text("🧾 تنسيق إعلان؟", reply_markup=yes_no("fmt:yes", "fmt:no"))
 
-    elif q.data == "fmt:no":
-        s["with_format"] = False
-        s["step"] = "media"
-        await q.message.reply_text("🖼 أرسل الصور")
+async def _ask_ad_text(q, s):
+    s["with_format"] = True
+    s["step"] = "ad_text"
+    await q.message.reply_text("✏️ نص الإعلان")
 
-    elif q.data == "custom:more":
-        s["inputs"] = []
-        s["ad_text"] = None
-        s["step"] = "ask_brightness"
-        await q.message.reply_text("🔄 مرة أخرى\n💡 تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
+async def _skip_format(q, s):
+    s["with_format"] = False
+    s["step"] = "media"
+    await q.message.reply_text("🖼 أرسل الصور")
 
-    elif q.data == "custom:end":
-        sessions.pop(uid, None)
-        await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
+async def _more(q, s):
+    s["inputs"] = []
+    s["ad_text"] = None
+    s["step"] = "ask_brightness"
+    await q.message.reply_text("🔄 مرة أخرى\n💡 تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
 
-    elif q.data == "custom:clear_settings":
-        clear_logo_settings(uid)
-        sessions.pop(uid, None)
-        await q.message.reply_text("🗑 تم المسح", reply_markup=main_keyboard(uid))
+async def _end(q, uid):
+    sessions.pop(uid, None)
+    await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
 
+async def _clear_settings(q, uid):
+    clear_logo_settings(uid)
+    sessions.pop(uid, None)
+    await q.message.reply_text("🗑 تم المسح", reply_markup=main_keyboard(uid))
+
+# =========================
+# Finish Custom
+# =========================
 async def finish_custom(update, context):
     q = update.callback_query
     uid = q.from_user.id
@@ -407,7 +448,7 @@ async def finish_custom(update, context):
                     img = enhance_fast(img)
 
             buf = BytesIO()
-            img.save(buf, format="JPEG", quality=100)
+            img.save(buf, format="JPEG", quality=100, optimize=True)
             buf.seek(0)
 
             tmp = tempfile.mktemp(suffix=".jpg")
@@ -418,14 +459,12 @@ async def finish_custom(update, context):
             if s["logo_color_percent"] != 0:
                 logo_path = adjust_logo_color(s["logo"], s["logo_color_percent"])
 
-            # تطبيق الشعار - هذه الدالة يجب أن تكون معرفة في مكان آخر
-            # سنفترض أنها موجودة في ملف designer.py
+            # تطبيق الشعار
             try:
                 from modules.designer import apply_custom_logo
                 out = apply_custom_logo(tmp, logo_path, s["width"], s["opacity"])
                 media_group.append(InputMediaPhoto(open(out, "rb")))
             except:
-                # إذا لم توجد الدالة، نرسل الصورة بدون شعار
                 media_group.append(InputMediaPhoto(open(tmp, "rb")))
 
     if media_group:

@@ -22,11 +22,6 @@ def main_keyboard(user_id=None):
     buttons.append(
         [InlineKeyboardButton("🎨 صمم صورتك", callback_data="custom:start")]
     )
-    
-    # زر مسح الإعدادات المحفوظة
-    buttons.append(
-        [InlineKeyboardButton("🗑 مسح إعدادات الشعار", callback_data="custom:clear_settings")]
-    )
 
     return InlineKeyboardMarkup(buttons)
 

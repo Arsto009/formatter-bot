@@ -52,3 +52,4 @@ def finish_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📤 إنهاء الإرسال", callback_data="custom:finish")]
     ])
+    

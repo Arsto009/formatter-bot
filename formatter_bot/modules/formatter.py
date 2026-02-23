@@ -1,6 +1,5 @@
 import os
 import tempfile
-import shutil
 from collections import deque
 from io import BytesIO
 
@@ -15,7 +14,6 @@ from PIL import Image, ImageEnhance, ImageFilter
 from settings import HEADER
 from core.keyboard import main_keyboard
 from modules.designer import apply_custom_logo, apply_custom_logo_video
-from core.storage import load_data, save_data
 
 # =========================
 # Queue إعدادات
@@ -37,44 +35,6 @@ CUSTOM_FOOTER = """
 07735544404
 07764404477
 """
-
-# =========================
-# حفظ واسترجاع إعدادات الشعار
-# =========================
-def save_logo_settings(user_id, logo_path, width, opacity, logo_color_percent):
-    data = load_data()
-    
-    if "logo_settings" not in data:
-        data["logo_settings"] = {}
-    
-    # نسخ الشعار إلى مجلد البيانات
-    saved_logo_dir = os.path.join("data", "saved_logos")
-    os.makedirs(saved_logo_dir, exist_ok=True)
-    
-    saved_logo_path = os.path.join(saved_logo_dir, f"user_{user_id}.png")
-    shutil.copy2(logo_path, saved_logo_path)
-    
-    data["logo_settings"][str(user_id)] = {
-        "logo_path": saved_logo_path,
-        "width": width,
-        "opacity": opacity,
-        "logo_color_percent": logo_color_percent
-    }
-    save_data(data)
-
-def load_logo_settings(user_id):
-    data = load_data()
-    return data.get("logo_settings", {}).get(str(user_id))
-
-def clear_logo_settings(user_id):
-    data = load_data()
-    if "logo_settings" in data and str(user_id) in data["logo_settings"]:
-        # حذف ملف الشعار المحفوظ
-        saved_path = data["logo_settings"][str(user_id)].get("logo_path")
-        if saved_path and os.path.exists(saved_path):
-            os.remove(saved_path)
-        del data["logo_settings"][str(user_id)]
-        save_data(data)
 
 # =========================
 # 🔥 جديد: تعديل لون الشعار بنسبة
@@ -158,14 +118,12 @@ def after_done():
 # =========================
 async def start_custom(update, context):
     uid = update.effective_user.id
-    saved = load_logo_settings(uid)
-    
     sessions[uid] = {
-        "step": "ask_brightness" if saved else "logo",  # 🔥 التغيير هنا: إذا في حفظ → يبدأ من الإنارة
-        "logo": saved.get("logo_path") if saved else None,
-        "width": saved.get("width") if saved else None,
-        "opacity": saved.get("opacity") if saved else None,
-        "logo_color_percent": saved.get("logo_color_percent", 0) if saved else 0,
+        "step": "logo",
+        "logo": None,
+        "width": None,
+        "opacity": None,
+        "logo_color_percent": 0,  # 🔥 جديد
         "brightness": False,
         "brightness_value": 0,
         "ai": False,
@@ -174,19 +132,8 @@ async def start_custom(update, context):
         "ad_text": None,
         "inputs": []
     }
-    
     await update.callback_query.answer()
-    
-    if saved:
-        # 🔥 إذا في حفظ → يبدأ من سؤال الإنارة مباشرة
-        await update.callback_query.message.reply_text(
-            "✅ تم تحميل إعدادات الشعار المحفوظة\n"
-            "💡 هل تريد تعديل الإنارة؟",
-            reply_markup=yes_no("bright:yes", "bright:no")
-        )
-    else:
-        # إذا ما في حفظ → يطلب الشعار
-        await update.callback_query.message.reply_text("📎 أرسل شعارك الآن")
+    await update.callback_query.message.reply_text("📎 أرسل شعارك الآن")
 
 # =========================
 # TEXT
@@ -218,12 +165,8 @@ async def handle_text(update, context):
 
     if s["step"] == "logo_color_value":
         s["logo_color_percent"] = int(txt)
-        s["step"] = "ask_save_settings"
-        await update.message.reply_text(
-            "💾 هل تريد حفظ إعدادات الشعار الحالية؟\n"
-            "(الشعار، العرض، الشفافية، نسبة اللون)",
-            reply_markup=yes_no("save:yes", "save:no")
-        )
+        s["step"] = "ask_brightness"
+        await update.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
     if s["step"] == "brightness_value":
@@ -297,38 +240,8 @@ async def handle_callbacks(update, context):
         return
 
     if q.data == "logo_color:no":
-        s["logo_color_percent"] = 0
-        s["step"] = "ask_save_settings"
-        await q.message.reply_text(
-            "💾 هل تريد حفظ إعدادات الشعار الحالية؟\n"
-            "(الشعار، العرض، الشفافية، نسبة اللون)",
-            reply_markup=yes_no("save:yes", "save:no")
-        )
-        return
-
-    if q.data == "save:yes":
-        uid = q.from_user.id
-        save_logo_settings(
-            uid,
-            s["logo"],
-            s["width"],
-            s["opacity"],
-            s.get("logo_color_percent", 0)
-        )
         s["step"] = "ask_brightness"
-        await q.message.reply_text(
-            "✅ تم حفظ الإعدادات بنجاح\n"
-            "💡 هل تريد تعديل الإنارة؟",
-            reply_markup=yes_no("bright:yes", "bright:no")
-        )
-        return
-
-    if q.data == "save:no":
-        s["step"] = "ask_brightness"
-        await q.message.reply_text(
-            "💡 هل تريد تعديل الإنارة؟",
-            reply_markup=yes_no("bright:yes", "bright:no")
-        )
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
     if q.data == "bright:yes":
@@ -382,30 +295,16 @@ async def handle_callbacks(update, context):
     if q.data == "custom:more":
         s["inputs"] = []
         s["ad_text"] = None
-        s["step"] = "ask_brightness"  # 🔥 في "المزيد" يبدأ من الإنارة (لأن الشعار محفوظ)
-        await q.message.reply_text(
-            "🔄 لنبدأ مرة أخرى\n"
-            "💡 هل تريد تعديل الإنارة؟",
-            reply_markup=yes_no("bright:yes", "bright:no")
-        )
+        s["step"] = "ask_brightness"
+        await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return
 
     if q.data == "custom:end":
         sessions.pop(uid, None)
         await q.message.reply_text("⬅️ تم الإنهاء", reply_markup=main_keyboard(uid))
-        return
-
-    if q.data == "custom:clear_settings":
-        clear_logo_settings(uid)
-        sessions.pop(uid, None)
-        await q.message.reply_text(
-            "🗑 تم مسح الإعدادات المحفوظة",
-            reply_markup=main_keyboard(uid)
-        )
-        return
 
 # =========================
-# FINISH
+# FINISH (كما هو بدون تغيير)
 # =========================
 async def finish_custom(update, context):
     q = update.callback_query
@@ -445,7 +344,7 @@ async def finish_custom(update, context):
             with open(tmp, "wb") as f:
                 f.write(buf.read())
 
-            # تطبيق تعديل لون الشعار هنا فقط
+            # 🔥 تطبيق تعديل لون الشعار هنا فقط
             logo_path = s["logo"]
             if s["logo_color_percent"] != 0:
                 logo_path = adjust_logo_color(s["logo"], s["logo_color_percent"])
@@ -481,19 +380,5 @@ def register(app):
     app.add_handler(CallbackQueryHandler(start_custom, pattern="^custom:start$"))
     app.add_handler(CallbackQueryHandler(finish_custom, pattern="^custom:finish$"))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
-    app.add_handler(CallbackQueryHandler(clear_settings_handler, pattern="^custom:clear_settings$"))
     app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, handle_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-async def clear_settings_handler(update, context):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-    
-    clear_logo_settings(uid)
-    sessions.pop(uid, None)
-    
-    await q.message.reply_text(
-        "🗑 تم مسح الإعدادات المحفوظة",
-        reply_markup=main_keyboard(uid)
-    )

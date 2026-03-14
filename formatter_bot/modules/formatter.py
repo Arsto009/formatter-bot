@@ -136,8 +136,6 @@ def after_done():
         [InlineKeyboardButton("⛔ إنهاء العملية", callback_data="custom:end")]
     ])
 
-
-
 def progress_bar(current, total, width=10):
     total = max(total, 1)
     filled = int(width * current / total)
@@ -415,9 +413,7 @@ async def finish_custom(update, context):
 
     if s["with_format"] and s["ad_text"]:
         await q.message.reply_text(
-            f"{HEADER}
-{s['ad_text']}
-{CUSTOM_FOOTER}"
+            f"{HEADER}\n{s['ad_text']}\n{CUSTOM_FOOTER}"
         )
 
     photo_group = []
@@ -471,12 +467,14 @@ async def finish_custom(update, context):
 
     total = len(s["inputs"])
     for i, (kind, path) in enumerate(s["inputs"], start=1):
-        await progress_msg.edit_text(f"⏳ جاري المعالجة...
-{progress_bar(i-1, total)} {int((i-1)*100/total)}%")
+        await progress_msg.edit_text(
+            f"⏳ جاري المعالجة...\n{progress_bar(i-1, total)} {int((i-1)*100/total)}%"
+        )
         await process_item(kind, path)
 
-    await progress_msg.edit_text("⏳ جاري الإرسال...
-" + progress_bar(total, total) + " 100%")
+    await progress_msg.edit_text(
+        "⏳ جاري الإرسال...\n" + progress_bar(total, total) + " 100%"
+    )
 
     if photo_group:
         # Telegram media group max 10

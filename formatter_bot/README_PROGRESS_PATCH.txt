@@ -1,1 +1,0 @@
-Patched with progress bar, type-preserving send, media group photos, and precise progress.

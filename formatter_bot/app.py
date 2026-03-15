@@ -26,7 +26,7 @@ async def start(update, context):
 
     await update.message.reply_text(
         f"فيض ابو الحسن 🏢
-        مرحبًا بك في بوت تنسيق الإعلانات\n\n"
+        \n مرحبًا بك في بوت تنسيق الإعلانات\n\n"
         "اختر العملية من القائمة بالأسفل:",
         reply_markup=global_start_keyboard()
     )

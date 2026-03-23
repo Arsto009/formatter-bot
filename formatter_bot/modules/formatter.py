@@ -468,7 +468,7 @@ async def finish_custom(update, context):
                 video_files.append(open(outv, "rb"))
 
     total = len(s["inputs"])
-    for i, (kind, path) in enumerate(s["inputs"], start=1):
+    for i, (kind, path) in enumerate(list(s["inputs"]), start=1):
         await progress_msg.edit_text(
             f"⏳ جاري المعالجة...\n{progress_bar(i-1, total)} {int((i-1)*100/total)}%"
         )
@@ -484,8 +484,11 @@ async def finish_custom(update, context):
             await q.message.reply_media_group(photo_group[i:i+10])
 
     if doc_group:
-        for i in range(0, len(doc_group), 10):
-            await q.message.reply_media_group(doc_group[i:i+10])
+        for doc in doc_group:
+            try:
+                await q.message.reply_document(doc.media)
+            except Exception as e:
+                print('Document send error:', e)
 
     for vf in video_files:
         await q.message.reply_video(vf)

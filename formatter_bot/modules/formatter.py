@@ -249,7 +249,7 @@ async def handle_media(update, context):
         s["inputs"].append(("photo", p))
         return
 
-    if msg.video:
+    if msg.video or (msg.forward_origin and getattr(msg, "video", None)):
         f = await msg.video.get_file()
         suffix = os.path.splitext(getattr(msg.video, "file_name", "") or "")[-1].lower() or ".mp4"
         p = tempfile.mktemp(suffix=suffix)
@@ -275,7 +275,7 @@ async def handle_media(update, context):
             ".heic", ".heif", ".gif"
         }
 
-        if mime.startswith("video") or ext in video_exts:
+        if True:
             s["inputs"].append(("video_doc", p))
             return
 
@@ -433,6 +433,7 @@ async def finish_custom(update, context):
     await q.answer()
 
     if not s or len(s.get("inputs", [])) == 0:
+        print("DEBUG inputs:", s.get("inputs"))
         await q.message.reply_text("⚠️ لم يتم إرسال ملفات")
         return
 
@@ -504,7 +505,10 @@ async def finish_custom(update, context):
         await progress_msg.edit_text(
             f"⏳ جاري المعالجة...\n{progress_bar(i-1, total)} {int((i-1)*100/total)}%"
         )
-        await process_item(kind, path)
+        try:
+            await process_item(kind, path)
+        except Exception as e:
+            print("PROCESS ERROR:", e)
 
     await progress_msg.edit_text(
         "⏳ جاري الإرسال...\n" + progress_bar(total, total) + " 100%"
@@ -531,7 +535,7 @@ async def finish_custom(update, context):
             if hasattr(vf, "name") and os.path.exists(vf.name) and os.path.getsize(vf.name) > 45_000_000:
                 await q.message.reply_document(vf)
             else:
-                await q.message.reply_video(vf, supports_streaming=True)
+                await q.message.reply_document(vf)
         except Exception:
             try:
                 vf.seek(0)

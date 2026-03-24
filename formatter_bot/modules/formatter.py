@@ -253,7 +253,25 @@ async def handle_media(update, context):
         ext = os.path.splitext(msg.document.file_name or "")[-1].lower()
         p = tempfile.mktemp(suffix=ext)
         await f.download_to_drive(p)
-        kind = "video_doc" if (msg.document.mime_type or "").startswith("video") else "photo_doc"
+
+        video_exts = {
+            ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v",
+            ".wmv", ".flv", ".mpeg", ".mpg", ".3gp", ".ts",
+            ".ogv", ".mts", ".m2ts", ".vob"
+        }
+        image_exts = {
+            ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff",
+            ".heic", ".heif", ".gif"
+        }
+
+        mime = (msg.document.mime_type or "").lower()
+        if mime.startswith("video") or ext in video_exts:
+            kind = "video_doc"
+        elif mime.startswith("image") or ext in image_exts:
+            kind = "photo_doc"
+        else:
+            kind = "photo_doc"
+
         s["inputs"].append((kind, p))
 
     elif msg.video:
@@ -420,6 +438,7 @@ async def finish_custom(update, context):
 
     photo_group = []
     doc_group = []
+    photo_doc_fallback_files = []
     video_files = []
     video_doc_files = []
 
@@ -452,7 +471,13 @@ async def finish_custom(update, context):
             if kind == "photo_doc":
                 doc_group.append(InputMediaDocument(open(out, "rb")))
             else:
-                photo_group.append(InputMediaPhoto(open(out, "rb")))
+                try:
+                    if os.path.getsize(out) > 9_500_000:
+                        photo_doc_fallback_files.append(open(out, "rb"))
+                    else:
+                        photo_group.append(InputMediaPhoto(open(out, "rb")))
+                except Exception:
+                    photo_group.append(InputMediaPhoto(open(out, "rb")))
         else:
             if s.get("use_logo", True):
                 logo_path = s["logo"]
@@ -488,13 +513,30 @@ async def finish_custom(update, context):
             try:
                 await q.message.reply_document(doc.media)
             except Exception as e:
-                print('Document send error:', e)
+                print("Document send error:", e)
 
     for vf in video_files:
-        await q.message.reply_video(vf)
+        try:
+            try:
+                vf.seek(0)
+            except Exception:
+                pass
+            if hasattr(vf, "name") and os.path.exists(vf.name) and os.path.getsize(vf.name) > 45_000_000:
+                await q.message.reply_document(vf)
+            else:
+                await q.message.reply_video(vf, supports_streaming=True)
+        except Exception:
+            try:
+                vf.seek(0)
+            except Exception:
+                pass
+            await q.message.reply_document(vf)
 
     for vdf in video_doc_files:
         await q.message.reply_document(vdf)
+
+    for pdf in photo_doc_fallback_files:
+        await q.message.reply_document(pdf)
 
     await progress_msg.edit_text("✅ تمت المعالجة بنجاح")
     await q.message.reply_text(

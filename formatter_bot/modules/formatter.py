@@ -9,7 +9,7 @@ from pillow_heif import register_heif_opener
 register_heif_opener()
 
 from telegram.ext import MessageHandler, CallbackQueryHandler, filters
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaDocument
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaDocument, InputMediaVideo
 from PIL import Image, ImageEnhance, ImageFilter
 
 from settings import HEADER
@@ -498,7 +498,9 @@ async def finish_custom(update, context):
             else:
                 outv = path
 
-            if kind == "video_doc":
+            if kind == "video":
+                video_group.append(InputMediaVideo(media=open(outv, "rb"), supports_streaming=True))
+            else:
                 video_doc_files.append(open(outv, "rb"))
             else:
                 video_files.append(open(outv, "rb"))
@@ -528,6 +530,10 @@ async def finish_custom(update, context):
                 await q.message.reply_document(doc.media)
             except Exception as e:
                 print("Document send error:", e)
+
+    if video_group:
+        for i in range(0, len(video_group), 10):
+            await q.message.reply_media_group(video_group[i:i+10])
 
     for vf in video_files:
         try:

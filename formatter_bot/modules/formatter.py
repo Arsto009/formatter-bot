@@ -450,6 +450,7 @@ async def finish_custom(update, context):
     photo_group = []
     doc_group = []
     photo_doc_fallback_files = []
+    video_group = []
     video_files = []
     video_doc_files = []
 
@@ -500,7 +501,7 @@ async def finish_custom(update, context):
 
             if kind == "video":
                 video_group.append(InputMediaVideo(media=open(outv, "rb"), supports_streaming=True))
-            else:
+            elif kind == "video_doc":
                 video_doc_files.append(open(outv, "rb"))
             else:
                 video_files.append(open(outv, "rb"))

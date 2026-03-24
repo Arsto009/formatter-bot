@@ -247,38 +247,45 @@ async def handle_media(update, context):
         p = tempfile.mktemp(suffix=".jpg")
         await f.download_to_drive(p)
         s["inputs"].append(("photo", p))
+        return
 
-    elif msg.document:
+    if msg.video:
+        f = await msg.video.get_file()
+        suffix = os.path.splitext(getattr(msg.video, "file_name", "") or "")[-1].lower() or ".mp4"
+        p = tempfile.mktemp(suffix=suffix)
+        await f.download_to_drive(p)
+        s["inputs"].append(("video", p))
+        return
+
+    if msg.document:
         f = await msg.document.get_file()
         ext = os.path.splitext(msg.document.file_name or "")[-1].lower()
-        p = tempfile.mktemp(suffix=ext)
+        p = tempfile.mktemp(suffix=ext or ".bin")
         await f.download_to_drive(p)
 
+        mime = (msg.document.mime_type or "").lower()
         video_exts = {
             ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v",
             ".wmv", ".flv", ".mpeg", ".mpg", ".3gp", ".ts",
-            ".ogv", ".mts", ".m2ts", ".vob"
+            ".ogv", ".mts", ".m2ts", ".vob", ".rm", ".rmvb",
+            ".asf", ".f4v", ".divx", ".xvid", ".qt"
         }
         image_exts = {
             ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff",
             ".heic", ".heif", ".gif"
         }
 
-        mime = (msg.document.mime_type or "").lower()
         if mime.startswith("video") or ext in video_exts:
-            kind = "video_doc"
-        elif mime.startswith("image") or ext in image_exts:
-            kind = "photo_doc"
-        else:
-            kind = "photo_doc"
+            s["inputs"].append(("video_doc", p))
+            return
 
-        s["inputs"].append((kind, p))
+        if mime.startswith("image") or ext in image_exts:
+            s["inputs"].append(("photo_doc", p))
+            return
 
-    elif msg.video:
-        f = await msg.video.get_file()
-        p = tempfile.mktemp(suffix=".mp4")
-        await f.download_to_drive(p)
-        s["inputs"].append(("video", p))
+        await msg.reply_text("⚠️ هذا النوع من الملفات غير مدعوم حالياً ضمن المعالجة.")
+        return
+
 
 # =========================
 # CALLBACKS
@@ -425,7 +432,7 @@ async def finish_custom(update, context):
     s = sessions.get(uid)
     await q.answer()
 
-    if not s or not s["inputs"]:
+    if not s or len(s.get("inputs", [])) == 0:
         await q.message.reply_text("⚠️ لم يتم إرسال ملفات")
         return
 

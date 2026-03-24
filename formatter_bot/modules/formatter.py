@@ -229,6 +229,12 @@ async def handle_media(update, context):
         return
 
     msg = update.message
+    print("DEBUG: handle_media triggered")
+    print("DEBUG TYPE:",
+          "photo" if msg.photo else
+          "video" if msg.video else
+          "document" if msg.document else
+          "other")
 
     if s["step"] == "logo":
         f = await (msg.photo[-1].get_file() if msg.photo else msg.document.get_file())
@@ -246,15 +252,15 @@ async def handle_media(update, context):
         f = await msg.photo[-1].get_file()
         p = tempfile.mktemp(suffix=".jpg")
         await f.download_to_drive(p)
-        s["inputs"].append(("photo", p))
+        s["inputs"].append(("photo", p)); print("DEBUG ADD photo:", p)
         return
 
-    if msg.video or (msg.forward_origin and getattr(msg, "video", None)):
+    if msg.video :
         f = await msg.video.get_file()
         suffix = os.path.splitext(getattr(msg.video, "file_name", "") or "")[-1].lower() or ".mp4"
         p = tempfile.mktemp(suffix=suffix)
         await f.download_to_drive(p)
-        s["inputs"].append(("video", p))
+        s["inputs"].append(("video", p)); print("DEBUG ADD video:", p)
         return
 
     if msg.document:
@@ -263,24 +269,19 @@ async def handle_media(update, context):
         p = tempfile.mktemp(suffix=ext or ".bin")
         await f.download_to_drive(p)
 
-        mime = (msg.document.mime_type or "").lower()
-        video_exts = {
-            ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v",
-            ".wmv", ".flv", ".mpeg", ".mpg", ".3gp", ".ts",
-            ".ogv", ".mts", ".m2ts", ".vob", ".rm", ".rmvb",
-            ".asf", ".f4v", ".divx", ".xvid", ".qt"
-        }
-        image_exts = {
-            ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff",
-            ".heic", ".heif", ".gif"
-        }
+        image_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".gif"}
 
-        if True:
+        if ext in image_exts:
+            s["inputs"].append(("photo_doc", p))
+            print("DEBUG ADD photo_doc:", p)
+        else:
             s["inputs"].append(("video_doc", p))
-            return
+            print("DEBUG ADD video_doc:", p)
+        return
+
 
         if mime.startswith("image") or ext in image_exts:
-            s["inputs"].append(("photo_doc", p))
+            s["inputs"].append(("photo_doc", p)); print("DEBUG ADD photo_doc:", p)
             return
 
         await msg.reply_text("⚠️ هذا النوع من الملفات غير مدعوم حالياً ضمن المعالجة.")
@@ -295,6 +296,7 @@ async def handle_callbacks(update, context):
     uid = q.from_user.id
     s = sessions.get(uid)
     await q.answer()
+    print("DEBUG FINISH INPUTS:", sessions.get(uid, {}).get("inputs"))
     if not s:
         return
 
@@ -431,6 +433,7 @@ async def finish_custom(update, context):
     uid = q.from_user.id
     s = sessions.get(uid)
     await q.answer()
+    print("DEBUG FINISH INPUTS:", sessions.get(uid, {}).get("inputs"))
 
     if not s or len(s.get("inputs", [])) == 0:
         print("DEBUG inputs:", s.get("inputs"))

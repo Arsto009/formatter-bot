@@ -441,9 +441,7 @@ async def finish_custom(update, context):
 
     if s["with_format"] and s["ad_text"]:
         await q.message.reply_text(
-            f"{HEADER}
-{s['ad_text']}
-{CUSTOM_FOOTER}"
+            f"{HEADER}\\n{s['ad_text']}\\n{CUSTOM_FOOTER}"
         )
 
     photo_group = []
@@ -498,8 +496,7 @@ async def finish_custom(update, context):
     total = len(s["inputs"])
     for i, (kind, path) in enumerate(list(s["inputs"]), start=1):
         await progress_msg.edit_text(
-            f"⏳ جاري المعالجة...
-{progress_bar(i-1, total)} {int((i-1)*100/total)}%"
+            f"⏳ جاري المعالجة... {progress_bar(i-1, total)} {int((i-1)*100/total)}%"
         )
         try:
             await process_item(kind, path)
@@ -507,8 +504,7 @@ async def finish_custom(update, context):
             print("PROCESS ERROR:", e)
 
     await progress_msg.edit_text(
-        "⏳ جاري الإرسال...
-" + progress_bar(total, total) + " 100%"
+        "⏳ جاري الإرسال..." + progress_bar(total, total) + " 100%"
     )
 
     if photo_group:

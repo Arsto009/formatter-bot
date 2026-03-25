@@ -240,9 +240,10 @@ async def handle_media(update, context):
         return
 
     if s["step"] != "media":
-        await msg.reply_text("⚠️ البوت ليس في مرحلة استقبال الصور/الفيديو الآن
-أكمل الخطوات أولاً إلى أن تظهر لك رسالة: 🖼 أرسل الصور أو الفيديو")
-        return
+        await msg.reply_text(
+            "⚠️ البوت ليس في مرحلة استقبال الصور/الفيديو الآن\n"
+            "أكمل الخطوات أولاً إلى أن تظهر لك رسالة: 🖼 أرسل الصور أو الفيديو"
+        )
 
     if msg.photo:
         f = await msg.photo[-1].get_file()

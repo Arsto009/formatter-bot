@@ -269,14 +269,17 @@ async def handle_media(update, context):
         p = tempfile.mktemp(suffix=ext or ".bin")
         await f.download_to_drive(p)
 
-        image_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif", ".gif"}
+        image_exts = {".jpg",".jpeg",".png",".webp",".bmp",".tif",".tiff",".heic",".heif",".gif"}
+        video_exts = {".mp4",".mov",".avi",".mkv",".webm",".m4v",".wmv",".flv",".mpeg",".mpg",".3gp",".ts",".ogv",".mts",".m2ts",".vob",".rm",".rmvb",".asf",".f4v",".divx",".xvid",".qt"}
 
-        if ext in image_exts:
+        mime = (msg.document.mime_type or "").lower()
+
+        if ext in image_exts or mime.startswith("image/"):
             s["inputs"].append(("photo_doc", p))
-            print("DEBUG ADD photo_doc:", p)
+        elif ext in video_exts or mime.startswith("video/"):
+            s["inputs"].append(("video_doc", p))
         else:
             s["inputs"].append(("video_doc", p))
-            print("DEBUG ADD video_doc:", p)
         return
 
 
@@ -500,7 +503,7 @@ async def finish_custom(update, context):
                 outv = path
 
             if kind == "video":
-                video_group.append(InputMediaVideo(media=open(outv, "rb"), supports_streaming=True))
+                video_files.append(open(outv, "rb"))
             elif kind == "video_doc":
                 video_doc_files.append(open(outv, "rb"))
             else:

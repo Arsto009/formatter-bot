@@ -195,22 +195,21 @@ def _clamp(value, min_value, max_value):
 
 def _build_video_tone_filter(brightness_value=0):
     v = float(brightness_value or 0)
-    brightness = _clamp(v / 100.0, -0.45, 0.45)
+    brightness = _clamp(v / 100.0, -0.35, 0.35)
 
     positive = max(0.0, v)
     negative = abs(min(0.0, v))
 
-    saturation = _clamp(1.0 + (positive * 0.012) - (negative * 0.004), 0.85, 1.55)
-    contrast = _clamp(1.0 + (abs(v) * 0.0065), 1.0, 1.32)
-    gamma = _clamp(1.0 - (positive * 0.0015) + (negative * 0.0010), 0.88, 1.12)
-    gamma_weight = _clamp(1.0 + (positive * 0.0035), 1.0, 1.32)
+    # تشبع متوازن (بدون مبالغة)
+    saturation = _clamp(1.0 + (positive * 0.006) - (negative * 0.003), 0.90, 1.35)
+
+    # تباين يحافظ على الظل بدون ما يغسل الصورة
+    contrast = _clamp(1.0 + (abs(v) * 0.004), 1.0, 1.20)
 
     return (
         f"eq=brightness={brightness:.4f}:"
         f"saturation={saturation:.4f}:"
-        f"contrast={contrast:.4f}:"
-        f"gamma={gamma:.4f}:"
-        f"gamma_weight={gamma_weight:.4f}"
+        f"contrast={contrast:.4f}"
     )
 
 

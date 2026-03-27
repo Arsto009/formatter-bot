@@ -65,6 +65,20 @@ async def _download_media_to_temp(file_obj, suffix=""):
     await file_obj.download_to_drive(p)
     return p
 
+async def _update_receive_counter(msg, s, text):
+    if s.get("counter_msg_id"):
+        try:
+            await msg.get_bot().edit_message_text(
+                chat_id=msg.chat_id,
+                message_id=s["counter_msg_id"],
+                text=text
+            )
+            return
+        except Exception:
+            pass
+    m = await msg.reply_text(text)
+    s["counter_msg_id"] = m.message_id
+
 # =========================
 # فوتر الإعلان
 # =========================
@@ -179,7 +193,8 @@ async def start_custom(update, context):
         "ai_mode": "fast",
         "with_format": False,
         "ad_text": None,
-        "inputs": []
+        "inputs": [],
+        "counter_msg_id": None
     }
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(
@@ -469,6 +484,7 @@ async def handle_callbacks(update, context):
     if q.data == "custom:more":
         s["inputs"] = []
         s["ad_text"] = None
+        s["counter_msg_id"] = None
         s["step"] = "ask_brightness"
         await q.message.reply_text("💡 هل تريد تعديل الإنارة؟", reply_markup=yes_no("bright:yes", "bright:no"))
         return

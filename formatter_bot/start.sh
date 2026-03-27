@@ -28,8 +28,8 @@ TGAPI_PID=$!
 echo "⏳ Waiting for Local Bot API to start..."
 
 i=0
-while [ $i -lt 20 ]; do
-  if curl -fsS http://127.0.0.1:8081 >/dev/null 2>&1; then
+while [ $i -lt 60 ]; do
+  if curl -sS http://127.0.0.1:8081 >/dev/null 2>&1; then
     echo "✅ Local Bot API is up"
     break
   fi
@@ -46,8 +46,8 @@ while [ $i -lt 20 ]; do
   sleep 1
 done
 
-if ! curl -fsS http://127.0.0.1:8081 >/dev/null 2>&1; then
-  echo "❌ Local Bot API did not become ready in time"
+if ! kill -0 "$TGAPI_PID" 2>/dev/null; then
+  echo "❌ telegram-bot-api is not running"
   echo "------ telegram-bot-api.log ------"
   cat /tmp/telegram-bot-api.log || true
   echo "----------------------------------"
